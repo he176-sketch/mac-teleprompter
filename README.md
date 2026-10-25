@@ -6,57 +6,138 @@
 >
 > **现在能不能用**：能。已实测 2 分 43 秒连续录制正常；十分钟以上长录未验收，需自行打 Recordly 补丁。
 
-macOS 原生浮动提词器：窗口置顶、跨桌面、可调透明度与字号，用中文语音识别按稿件位置高亮滚动。
+macOS 原生浮动窗口，用中文语音识别跟着你读，读到哪高亮到哪。配合改造过的 Recordly，录屏时窗口本身不会进画面。
 
-配套改造过的 Recordly 后，录屏时提词器窗口**不会进入成片**——开录前它的进程会被加入 ScreenCaptureKit 的排除列表，摄像头画面与麦克风音轨照常保留。
+---
 
-> A macOS floating teleprompter that follows your voice, plus a Recordly patch that keeps the teleprompter out of screen recordings.
+## 一、环境要求
 
-## 为什么做这个
+| 项目 | 要求 |
+|---|---|
+| 系统 | macOS 13 Ventura 或更高（依赖 ScreenCaptureKit 与新版 Speech 框架） |
+| 芯片 | Apple Silicon / Intel 均可 |
+| 工具链 | 只需 Xcode 命令行工具：`xcode-select --install` |
+| 录屏 | 可选。要「提词器不进画面」需要自行构建改造版 Recordly |
 
-手机上有能用的提词器，但录桌面课程、做直播时没有对应工具：要么提词器被录进画面，要么来回切窗口打断节奏。这个项目只解决一件事——**一直在眼前，但永远不在成片里**。
+不需要 Node、不需要 Python、不需要 Xcode 工程文件。
 
-## 构建
-
-只依赖本机 Xcode 命令行工具，不需要 Xcode 工程文件：
+## 二、安装
 
 ```sh
+git clone https://github.com/he176-sketch/mac-teleprompter.git
+cd mac-teleprompter
 ./build.sh
-open build/MacTeleprompter.app
 ```
 
-首次开始跟读时，macOS 会请求**麦克风**与**语音识别**权限。
+构建产物在 `build/MacTeleprompter.app`。把整个 `.app` 拖进 `/Applications` 可长期使用。
 
-## 使用
+首次打开若提示「无法验证开发者」：
 
-1. 启动 `MacTeleprompter`，打开稿件，调整透明度、字号、窗口位置；
-2. 启动改造版 Recordly，选择「屏幕」开始录制；
-3. 录制结束，提词器窗口已被排除，成片里只有你的画面。
+```sh
+xattr -dr com.apple.quarantine /Applications/MacTeleprompter.app
+```
 
-快捷键与穿透：
+或右键 App → 打开 → 再点一次「打开」。
 
-- `⌘⇧T` 切换鼠标穿透
-- 穿透状态下按 `Esc` 恢复鼠标操作
-- 菜单栏「提」始终保留「关闭鼠标穿透」「显示提词器」「退出」
+## 三、授权（这一步最容易漏）
 
-## Recordly 配合改动
+首次点击「开始跟读」时，系统会依次弹两个权限：
 
-原版 Recordly 会把提词器一起录进去。改动很小：开录前把 `MacTeleprompter` 进程加入 ScreenCaptureKit 排除列表，做法见 [docs/recordly-integration.md](docs/recordly-integration.md)。
+1. **麦克风** —— 必须允许，否则没有声音输入；
+2. **语音识别** —— 必须允许，否则不会跟随。
 
-> Recordly 采用 AGPL-3.0，本仓库**不分发**其源码，只提供改动说明；需要完整录屏功能请基于上游自行构建。
+如果误点了「不允许」，去系统设置里补：
 
-## 目录
+```
+系统设置 → 隐私与安全性 → 麦克风      → 勾选 MacTeleprompter
+系统设置 → 隐私与安全性 → 语音识别     → 勾选 MacTeleprompter
+```
+
+> 授权后建议**重启一次 App**，部分系统版本上权限不会热生效。
+
+## 四、使用步骤
+
+1. **准备稿件**：任意纯文本文件（`.txt`），UTF-8 编码。建议每段 2–3 行，长段落会把可视区域撑满。
+2. **启动提词器**：`open build/MacTeleprompter.app`，从菜单栏「提」里选择「打开稿件」。
+3. **调整外观**：拖动窗口到摄像头附近；菜单里调字号、透明度。窗口默认置顶且跨桌面。
+4. **开始跟读**：点「开始跟读」，正常朗读即可。当前句会高亮，长段落会按句滚动，识别出错时会自动容错重试。
+5. **开录（可选）**：启动改造版 Recordly，选择「屏幕」，开始录制。提词器窗口已被排除，成片里只有你的画面。
+6. **结束**：停止录制，再点提词器里的「停止跟读」。
+
+## 五、快捷键
+
+| 操作 | 快捷键 / 位置 |
+|---|---|
+| 切换鼠标穿透 | `⌘⇧T` |
+| 穿透状态下恢复鼠标 | `Esc`，或菜单栏「提 → 关闭鼠标穿透」 |
+| 显示/隐藏窗口 | 菜单栏「提 → 显示提词器」 |
+| 退出 | 菜单栏「提 → 退出」 |
+
+穿透模式的意思是：鼠标点击会直接穿到下面的应用，提词器不会抢焦点——适合一边操作软件一边读稿。
+
+## 六、让提词器不进录屏（可选）
+
+原版 Recordly 会把提词器一起录进去。需要三步：
+
+1. 按 [docs/recordly-integration.md](docs/recordly-integration.md) 修改 Recordly 的 ScreenCaptureKit 排除列表；
+2. 自行构建改造版（上游使用 npm，`npm install && npm run build`）；
+3. 放到 `/Applications`，命名随意，例如 `Recordly-提词版.app`。
+
+**顺序很重要**：先开提词器，再开录制。否则排除项匹配不到进程，提词器会被录进去。
+
+> Recordly 采用 AGPL-3.0，本仓库不分发其源码，只提供改动说明。
+
+## 七、验证是否正常工作
+
+| 你想确认的 | 怎么验证 |
+|---|---|
+| 语音识别通了 | 开始跟读后念第一句，2–3 秒内该句应高亮 |
+| 滚动正确 | 快速跳到第 5 段朗读，画面应跟随到第 5 段而不是慢慢滚 |
+| 穿透生效 | 开启后点下面的浏览器，应该能直接点到，而不是点回提词器 |
+| 不进录屏 | 录 10 秒，回放里不应出现提词器窗口 |
+
+## 八、常见问题
+
+**Q：点了开始跟读没反应？**
+先看系统设置里两个权限是否都勾选；然后退出 App 重开。仍有问题看是不是静音了输入设备。
+
+**Q：高亮一直停在第一句？**
+大概率是麦克风音量过低或选了错误的输入设备。系统设置 → 声音 → 输入，说话时电平条应该有明显跳动。
+
+**Q：念快了就跟不上？**
+匹配器是「累计转写」策略，允许漏字跳词，但一次跳两三句会丢失锚点。建议按句子念，别整段速读。
+
+**Q：穿透后按 Esc 没恢复？**
+部分输入法会吞掉 Esc。用菜单栏「提 → 关闭鼠标穿透」，这个入口永远有效。
+
+**Q：换电脑后打不开？**
+签名是本地的。执行 `xattr -dr com.apple.quarantine` 或右键打开；分发给别人需要自己的开发者证书。
+
+**Q：录屏里还是有提词器？**
+按顺序检查：是否用的改造版 Recordly？是否先开的提词器？`bundleIdentifier` 是否和 `Info.plist` 完全一致？
+
+**Q：能识别英文吗？**
+识别语言固定 zh-CN。中英混读时长英文术语容易错，建议稿件里把专有名词写成中文或缩写。
+
+## 九、停止与卸载
+
+- 停止跟读：窗口内「停止跟读」；
+- 退出：菜单栏「提 → 退出」；
+- 卸载：删除 `.app` 即可，不写系统目录、无后台服务、无残留配置。
+
+## 十、目录结构
 
 ```
 Sources/TeleprompterApp.swift    窗口、菜单、权限、鼠标穿透
 Sources/ScriptFollower.swift     累计转写匹配器（漏字/错字/重复/停顿续读）
-Resources/Info.plist
-build.sh                         直接调用 swiftc 打包 .app
+Resources/Info.plist             应用信息与权限声明
+build.sh                         调用 swiftc 直接打包 .app
+docs/recordly-integration.md     与 Recordly 配合的改动说明
 ```
 
 ## 已知缺陷
 
-见 [DEFECTS.md](DEFECTS.md)。当前版本适合 1–3 分钟短视频录制；**十分钟以上长录尚未验收**。
+见 [DEFECTS.md](DEFECTS.md)。
 
 ## 许可证
 
